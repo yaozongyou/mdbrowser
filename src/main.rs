@@ -4,6 +4,7 @@ mod log;
 mod util;
 use util::split_subsequence;
 
+use pulldown_cmark::{html, Options, Parser};
 use std::fs;
 use std::io::prelude::*;
 use std::net::TcpListener;
@@ -50,7 +51,18 @@ fn handle_connection(mut stream: TcpStream) {
 
     let contents = fs::read_to_string(filename).unwrap();
 
-    let response = format!("{}{}", status_line, contents);
+    //let markdown_input = "Hello world, this is a ~~complicated~~ *very simple* example.";
+    // Set up options and parser. Strikethroughs are not part of the CommonMark standard
+    // and we therefore must enable it explicitly.
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    let parser = Parser::new_ext(&contents, options);
+
+    // Write to String buffer.
+    let mut html_output = String::new();
+    html::push_html(&mut html_output, parser);
+
+    let response = format!("{}{}", status_line, html_output);
 
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
