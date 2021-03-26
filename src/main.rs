@@ -51,7 +51,6 @@ fn handle_connection(mut stream: TcpStream) {
 
     let contents = fs::read_to_string(filename).unwrap();
 
-    //let markdown_input = "Hello world, this is a ~~complicated~~ *very simple* example.";
     // Set up options and parser. Strikethroughs are not part of the CommonMark standard
     // and we therefore must enable it explicitly.
     let mut options = Options::empty();
