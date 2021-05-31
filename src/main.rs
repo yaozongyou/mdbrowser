@@ -3,6 +3,8 @@ use lib::ThreadPool;
 mod log;
 mod util;
 use util::split_subsequence;
+mod cli;
+use structopt::StructOpt;
 
 use pulldown_cmark::{html, Options, Parser};
 use std::fs;
@@ -15,7 +17,13 @@ use std::str;
 fn main() {
     message!("main start");
 
-    let listener = TcpListener::bind("0.0.0.0:7878").unwrap();
+    let cli::CommandLineArgs {
+        listening_address,
+        directory: _,
+    } = cli::CommandLineArgs::from_args();
+
+
+    let listener = TcpListener::bind(listening_address).unwrap();
     let pool = ThreadPool::new(4);
 
     for stream in listener.incoming() {

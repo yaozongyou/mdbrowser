@@ -12,3 +12,4 @@ license = "MIT"
 chrono = "0.4"
 gettid = "0.1.1"
 pulldown-cmark = { version = "0.8", default-features = false, features = ["simd"] }
+structopt = "0.3"
