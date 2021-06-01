@@ -4,40 +4,40 @@ mod log;
 mod util;
 use util::split_subsequence;
 mod cli;
-use structopt::StructOpt;
-
 use pulldown_cmark::{html, Options, Parser};
 use std::fs;
 use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::path::Path;
+use std::path::PathBuf;
 use std::str;
+use structopt::StructOpt;
 
 fn main() {
     message!("main start");
 
     let cli::CommandLineArgs {
         listening_address,
-        directory: _,
+        directory,
     } = cli::CommandLineArgs::from_args();
-
 
     let listener = TcpListener::bind(listening_address).unwrap();
     let pool = ThreadPool::new(4);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
+        let directory = directory.clone();
 
         pool.execute(|| {
-            handle_connection(stream);
+            handle_connection(stream, directory);
         });
     }
 
     println!("Shutting down.");
 }
 
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(mut stream: TcpStream, mut directory: PathBuf) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
 
@@ -49,14 +49,17 @@ fn handle_connection(mut stream: TcpStream) {
 
     message!("uri: {:?}", str::from_utf8(uri).unwrap());
 
-    let fpath = &uri[1..];
+    directory.push(Path::new(str::from_utf8(&uri[1..]).unwrap()));
+    message!("directory: {:?}", directory);
+    message!("exists: {:?}", directory.as_path().exists());
 
-    let (status_line, filename) = if Path::new(str::from_utf8(fpath).unwrap()).exists() {
-        ("HTTP/1.1 200 OK\r\n\r\n", str::from_utf8(fpath).unwrap())
+    let (status_line, filename) = if directory.as_path().exists() {
+        ("HTTP/1.1 200 OK\r\n\r\n", directory)
     } else {
-        ("HTTP/1.1 404 NOT FOUND\r\n\r\n", "404.html")
+        ("HTTP/1.1 404 NOT FOUND\r\n\r\n", PathBuf::from("404.html"))
     };
 
+    message!("filename: {:?}", filename);
     let contents = fs::read_to_string(filename).unwrap();
 
     // Set up options and parser. Strikethroughs are not part of the CommonMark standard
