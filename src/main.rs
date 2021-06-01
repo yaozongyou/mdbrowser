@@ -1,4 +1,4 @@
-use pulldown_cmark::{html, Options, Parser};
+use pulldown_cmark::{html, Event, Options, Parser};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -48,8 +48,46 @@ async fn handle_markdown(
         // Write to String buffer.
         let mut html_output = String::new();
         html::push_html(&mut html_output, parser);
-        Ok(Response::builder().body(html_output))
+
+        let mut result = format!(
+            "<!DOCTYPE html>
+<html>
+<head>
+<title>{}</title>
+<style>
+  body {{
+    width: 1024px;
+    margin: auto;
+  }}
+  pre {{
+    white-space: pre-wrap;       /* Since CSS 2.1 */
+    white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+    white-space: -pre-wrap;      /* Opera 4-6 */
+    white-space: -o-pre-wrap;    /* Opera 7 */
+    word-wrap: break-word;       /* Internet Explorer 5.5+ */
+}}
+</style>
+</head>
+<body>",
+            get_title(&contents)
+        );
+        result.push_str(&html_output);
+        result.push_str("</body>");
+
+        Ok(Response::builder().body(result))
     } else {
         Err(warp::reject())
     }
+}
+
+fn get_title(contents: &str) -> String {
+    let parser = Parser::new(contents);
+    for event in parser {
+        match event {
+            Event::Text(text) => return text.to_string(),
+            _ => continue,
+        }
+    }
+
+    "".to_owned()
 }
