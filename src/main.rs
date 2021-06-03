@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
-use warp::{http::Response, Filter};
+use warp::{http::Response, path::FullPath, Filter};
 
 mod cli;
 
@@ -21,7 +21,7 @@ async fn main() {
     let directory = Arc::new(directory);
 
     let routes = warp::get()
-        .and(warp::path::param())
+        .and(warp::path::full())
         .and(warp::any().map(move || directory.clone()))
         .and_then(handle_markdown)
         .or(warp::fs::dir(directory_copy));
@@ -32,12 +32,13 @@ async fn main() {
 }
 
 async fn handle_markdown(
-    fpath: String,
+    fpath: FullPath,
     directory: Arc<PathBuf>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    if fpath.ends_with(".md") {
+    if fpath.as_str().ends_with(".md") {
         let contents =
-            fs::read_to_string(directory.to_str().unwrap().to_owned() + "/" + &fpath).unwrap();
+            fs::read_to_string(directory.to_str().unwrap().to_owned() + "/" + &fpath.as_str())
+                .unwrap();
 
         // Set up options and parser. Strikethroughs are not part of the CommonMark standard
         // and we therefore must enable it explicitly.
