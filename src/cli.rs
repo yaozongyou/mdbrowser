@@ -23,4 +23,16 @@ pub struct CommandLineArgs {
         default_value = "./"
     )]
     pub directory: PathBuf,
+
+    /// Css class name for markdown div
+    #[structopt(short = "", long = "css_class", default_value = "markdown-body")]
+    pub css_class: String,
+
+    /// Css href for styling
+    #[structopt(long = "style")]
+    pub styles: Option<Vec<String>>,
+
+    /// Linking script files
+    #[structopt(long = "script")]
+    pub scripts: Option<Vec<String>>,
 }

@@ -15,14 +15,22 @@ async fn main() {
     let cli::CommandLineArgs {
         listening_address,
         directory,
+        css_class,
+        styles,
+        scripts,
     } = cli::CommandLineArgs::from_args();
 
     let directory_copy = directory.clone();
     let directory = Arc::new(directory);
+    let style_header = get_html_style_header(&styles);
+    let script_header = get_html_script_header(&scripts);
 
     let routes = warp::get()
         .and(warp::path::full())
         .and(warp::any().map(move || directory.clone()))
+        .and(warp::any().map(move || css_class.clone()))
+        .and(warp::any().map(move || style_header.clone()))
+        .and(warp::any().map(move || script_header.clone()))
         .and_then(handle_markdown)
         .or(warp::fs::dir(directory_copy));
 
@@ -34,22 +42,22 @@ async fn main() {
 async fn handle_markdown(
     fpath: FullPath,
     directory: Arc<PathBuf>,
+    css_class: String,
+    style_header: String,
+    script_header: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     if fpath.as_str().ends_with(".md") {
         let contents =
             fs::read_to_string(directory.to_str().unwrap().to_owned() + "/" + &fpath.as_str())
                 .unwrap();
 
-        // Set up options and parser. Strikethroughs are not part of the CommonMark standard
-        // and we therefore must enable it explicitly.
         let mut options = Options::empty();
         options.insert(Options::ENABLE_STRIKETHROUGH);
         options.insert(Options::ENABLE_TABLES);
         let parser = Parser::new_ext(&contents, options);
 
-        // Write to String buffer.
-        let mut html_output = String::new();
-        html::push_html(&mut html_output, parser);
+        let mut md_output = String::new();
+        html::push_html(&mut md_output, parser);
 
         let mut result = format!(
             "<!DOCTYPE html>
@@ -57,39 +65,17 @@ async fn handle_markdown(
 <head>
 <meta charset=\"UTF-8\">
 <title>{}</title>
-<style>
-  body {{
-    width: 1024px;
-    margin: auto;
-  }}
-  pre {{
-    white-space: pre-wrap;       /* Since CSS 2.1 */
-    white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
-    white-space: -pre-wrap;      /* Opera 4-6 */
-    white-space: -o-pre-wrap;    /* Opera 7 */
-    word-wrap: break-word;       /* Internet Explorer 5.5+ */
-  }}
-  table {{
-    border-collapse: collapse;
-    border-spacing: 0;
-  }}
-  th {{
-    text-align: center;
-  }}
-  th, td {{
-    border: 1px solid #eee;
-    padding: 4px 12px;
-    vertical-align: top;
-  }}
-  th {{
-    background-color: #f5f5f5;
-  }}
-</style>
+{}
+{}
 </head>
 <body>",
-            get_title(&contents)
+            get_title(&contents),
+            style_header,
+            script_header
         );
-        result.push_str(&html_output);
+        result.push_str(&format!("<div class=\"{}\">", css_class));
+        result.push_str(&md_output);
+        result.push_str("</div>");
         result.push_str("</body>");
 
         Ok(Response::builder().body(result))
@@ -108,4 +94,36 @@ fn get_title(contents: &str) -> String {
     }
 
     "".to_owned()
+}
+
+fn get_html_style_header(style_links: &Option<Vec<String>>) -> String {
+    style_links
+        .as_ref()
+        .unwrap_or(&vec![])
+        .iter()
+        .filter(|&s| !s.is_empty())
+        .map(|s| {
+            if s.contains("{") {
+                format!("<style>{}</style>\n", s)
+            } else {
+                format!("<link rel=\"stylesheet\" href=\"{}\">\n", s)
+            }
+        })
+        .fold(String::from(""), |r, s| r + &s)
+}
+
+fn get_html_script_header(script_links: &Option<Vec<String>>) -> String {
+    script_links
+        .as_ref()
+        .unwrap_or(&vec![])
+        .iter()
+        .filter(|&s| !s.is_empty())
+        .map(|s| {
+            if s.contains(";") {
+                format!("<script type=\"text/javascript\">{}</script>", s)
+            } else {
+                format!("<script type=\"text/javascript\" src=\"{}\"></script>", s)
+            }
+        })
+        .fold(String::from(""), |r, s| r + &s)
 }
