@@ -44,6 +44,7 @@ async fn handle_markdown(
         // and we therefore must enable it explicitly.
         let mut options = Options::empty();
         options.insert(Options::ENABLE_STRIKETHROUGH);
+        options.insert(Options::ENABLE_TABLES);
         let parser = Parser::new_ext(&contents, options);
 
         // Write to String buffer.
@@ -54,6 +55,7 @@ async fn handle_markdown(
             "<!DOCTYPE html>
 <html>
 <head>
+<meta charset=\"UTF-8\">
 <title>{}</title>
 <style>
   body {{
@@ -66,7 +68,22 @@ async fn handle_markdown(
     white-space: -pre-wrap;      /* Opera 4-6 */
     white-space: -o-pre-wrap;    /* Opera 7 */
     word-wrap: break-word;       /* Internet Explorer 5.5+ */
-}}
+  }}
+  table {{
+    border-collapse: collapse;
+    border-spacing: 0;
+  }}
+  th {{
+    text-align: center;
+  }}
+  th, td {{
+    border: 1px solid #eee;
+    padding: 4px 12px;
+    vertical-align: top;
+  }}
+  th {{
+    background-color: #f5f5f5;
+  }}
 </style>
 </head>
 <body>",
