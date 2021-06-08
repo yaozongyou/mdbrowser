@@ -1,4 +1,5 @@
 use pulldown_cmark::{html, Event, Options, Parser};
+use regex::Regex;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -58,6 +59,8 @@ async fn handle_markdown(
 
         let mut md_output = String::new();
         html::push_html(&mut md_output, parser);
+        let re = Regex::new(r"(\p{Han})\p{White_Space}(\p{Han})").unwrap();
+        let md_output = re.replace_all(&md_output, "$1$2");
 
         let mut result = format!(
             "<!DOCTYPE html>
