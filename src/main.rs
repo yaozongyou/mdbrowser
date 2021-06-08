@@ -119,7 +119,7 @@ fn get_html_script_header(script_links: &Option<Vec<String>>) -> String {
         .iter()
         .filter(|&s| !s.is_empty())
         .map(|s| {
-            if s.contains(";") {
+            if s.contains("(") {
                 format!("<script type=\"text/javascript\">{}</script>", s)
             } else {
                 format!("<script type=\"text/javascript\" src=\"{}\"></script>", s)
