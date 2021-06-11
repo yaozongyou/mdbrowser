@@ -8,6 +8,8 @@ flag.  Run --help for more options.
 
 1. Running with GitHub Markdown style:
 ```bash
-./mdbrowser -C /path/to/markdown/directory --style="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/4.0.0/github-markdown.css" --style="body {width: 1024px;margin: auto;}"
+./mdbrowser -C /path/to/markdown/directory                                                         \
+    --style="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/4.0.0/github-markdown.css" \
+    --style="body {width: 1024px;margin: auto;}"
 ```
 This will run a local web server on port 8080 that points to your markdown directory.
