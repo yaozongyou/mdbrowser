@@ -13,3 +13,12 @@ flag.  Run --help for more options.
     --style="body {width: 1024px;margin: auto;}"
 ```
 This will run a local web server on port 8080 that points to your markdown directory.
+
+2. Running with gitiles style:
+```bash
+./mdbrowser -C /path/to/markdown/directory                       \
+    --css_class="doc"                                            \
+    --style="https://chromium.googlesource.com/+static/base.css" \
+    --style="https://chromium.googlesource.com/+static/doc.css"  \
+    --style="body {width: 1024px;margin: auto;}"
+```

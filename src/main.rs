@@ -109,7 +109,7 @@ fn get_html_style_header(style_links: &Option<Vec<String>>) -> String {
             if s.contains("{") {
                 format!("<style>{}</style>\n", s)
             } else {
-                format!("<link rel=\"stylesheet\" href=\"{}\">\n", s)
+                format!("<link type=\"text/css\" rel=\"stylesheet\" href=\"{}\">\n", s)
             }
         })
         .fold(String::from(""), |r, s| r + &s)
