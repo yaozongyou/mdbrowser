@@ -1,4 +1,4 @@
-use pulldown_cmark::{html, Event, Options, Parser};
+use pulldown_cmark::{html, CowStr, Event, Options, Parser, Tag};
 use regex::Regex;
 use std::fs;
 use std::net::SocketAddr;
@@ -57,10 +57,41 @@ async fn handle_markdown(
         options.insert(Options::ENABLE_TABLES);
         let parser = Parser::new_ext(&contents, options);
 
+        // add anchors to headings
+        let mut heading_level = 0;
+        let parser = parser.filter_map(|event| match event {
+            Event::Start(Tag::Heading(level @ 1..=6)) => {
+                heading_level = level;
+                None
+            }
+            Event::Text(text) => {
+                if heading_level != 0 {
+                    let anchor = text
+                        .clone()
+                        .into_string()
+                        .trim()
+                        .to_lowercase()
+                        .replace(" ", "-");
+                    let tmp = Event::Html(CowStr::from(format!(
+                        "<h{} id=\"{}\">{}",
+                        heading_level, anchor, text
+                    )))
+                    .into();
+                    heading_level = 0;
+                    return tmp;
+                }
+                Some(Event::Text(text))
+            }
+            _ => Some(event),
+        });
+
         let mut md_output = String::new();
         html::push_html(&mut md_output, parser);
         let re = Regex::new(r"(\p{Han})\p{White_Space}(\p{Han})").unwrap();
         let md_output = re.replace_all(&md_output, "$1$2");
+
+        let md_output =
+            md_output.replace("<p>[TOC]</p>", get_table_of_contents(&contents).as_str());
 
         let mut result = format!(
             "<!DOCTYPE html>
@@ -109,7 +140,10 @@ fn get_html_style_header(style_links: &Option<Vec<String>>) -> String {
             if s.contains("{") {
                 format!("<style>{}</style>\n", s)
             } else {
-                format!("<link type=\"text/css\" rel=\"stylesheet\" href=\"{}\">\n", s)
+                format!(
+                    "<link type=\"text/css\" rel=\"stylesheet\" href=\"{}\">\n",
+                    s
+                )
             }
         })
         .fold(String::from(""), |r, s| r + &s)
@@ -129,4 +163,108 @@ fn get_html_script_header(script_links: &Option<Vec<String>>) -> String {
             }
         })
         .fold(String::from(""), |r, s| r + &s)
+}
+
+fn get_toc_list(contents: &str) -> Vec<(u32, String)> {
+    let mut toc_list = vec![];
+
+    let mut level = 0;
+    let mut in_heading = false;
+
+    let parser = Parser::new(contents);
+    for event in parser {
+        match event {
+            Event::Text(text) => {
+                if in_heading {
+                    toc_list.push((level, text.into_string()));
+                }
+                continue;
+            }
+            Event::Start(Tag::Heading(h)) => {
+                in_heading = true;
+                level = h;
+                continue;
+            }
+            Event::End(Tag::Heading(_h)) => {
+                in_heading = false;
+                continue;
+            }
+            _ => continue,
+        }
+    }
+
+    toc_list
+}
+
+#[derive(Debug)]
+struct ContentItem {
+    level: u32,
+    text: String,
+    children: Vec<ContentItem>,
+}
+
+fn append_heading(content_items: &mut Vec<ContentItem>, heading: (u32, String)) {
+    match content_items.last_mut() {
+        Some(last_content_item) if heading.0 > last_content_item.level => {
+            append_heading(&mut last_content_item.children, heading);
+        }
+        _ => {
+            content_items.push(ContentItem {
+                level: heading.0,
+                text: heading.1,
+                children: vec![],
+            });
+        }
+    }
+}
+
+fn order_toc_list(mut heading_list: Vec<(u32, String)>) -> Vec<ContentItem> {
+    let mut content_items = vec![];
+
+    while !heading_list.is_empty() {
+        let heading = heading_list.remove(0);
+        append_heading(&mut content_items, heading);
+    }
+
+    content_items
+}
+
+fn render_toc(contents: &Vec<ContentItem>) -> String {
+    if contents.is_empty() {
+        return "".to_owned();
+    }
+
+    let mut str = String::from("<ul>\n");
+    for content in contents {
+        str.push_str(
+            format!(
+                "<li><a href=\"#{}\">{}</a></li>\n",
+                content.text.trim().to_lowercase().replace(" ", "-"),
+                content.text
+            )
+            .as_str(),
+        );
+        str.push_str(render_toc(&content.children).as_str());
+    }
+    str.push_str("</ul>\n");
+    str
+}
+
+fn get_table_of_contents(contents: &str) -> String {
+    let mut toc = String::from("<div class='toc'>\n");
+
+    let toc_list = get_toc_list(contents);
+    let contents = order_toc_list(toc_list);
+
+    toc.push_str("<div class=\"toc-aux\">");
+    let str = if contents.len() == 1 {
+        render_toc(&contents[0].children)
+    } else {
+        render_toc(&contents)
+    };
+    toc.push_str(str.as_str());
+
+    toc.push_str("</div>\n");
+    toc.push_str("</div>\n");
+    toc
 }

@@ -10,7 +10,7 @@ flag.  Run --help for more options.
 ```bash
 ./mdbrowser -C /path/to/markdown/directory                                                         \
     --style="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/4.0.0/github-markdown.css" \
-    --style="body {width: 1024px;margin: auto;}"
+    --style="body {width: 1024px;margin: auto;} .toc-aux {background: #f9f9f9; border: 1px solid #f2f2f2}"
 ```
 This will run a local web server on port 8080 that points to your markdown directory.
 
@@ -20,5 +20,5 @@ This will run a local web server on port 8080 that points to your markdown direc
     --css_class="doc"                                            \
     --style="https://chromium.googlesource.com/+static/base.css" \
     --style="https://chromium.googlesource.com/+static/doc.css"  \
-    --style="body {width: 1024px;margin: auto;}"
+    --style="body {width: 1024px;margin: auto;} .toc-aux {background: #f9f9f9; border: 1px solid #f2f2f2}"
 ```
