@@ -1,7 +1,10 @@
+use chrono::prelude::*;
+use git2::{Error, Repository, Status};
 use pulldown_cmark::{html, CowStr, Event, Options, Parser, Tag};
 use regex::Regex;
 use std::fs;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -92,6 +95,15 @@ async fn handle_markdown(
 
         let md_output =
             md_output.replace("<p>[TOC]</p>", get_table_of_contents(&contents).as_str());
+
+        let version = get_file_git_version(
+            &directory.to_str().unwrap().to_owned(),
+            &fpath.as_str().to_owned(),
+        )
+        .unwrap_or("".to_owned());
+
+        let re = Regex::new(r"(</h[1-5]>)").unwrap();
+        let md_output = re.replace(&md_output, &("$1 ".to_owned() + &version));
 
         let mut result = format!(
             "<!DOCTYPE html>
@@ -267,4 +279,45 @@ fn get_table_of_contents(contents: &str) -> String {
     toc.push_str("</div>\n");
     toc.push_str("</div>\n");
     toc
+}
+
+fn get_file_git_version(repo_dir: &String, fpath: &String) -> Result<String, Error> {
+    let fpath = fpath.trim_start_matches('/');
+    let repo = Repository::open(repo_dir)?;
+    let status = repo.status_file(Path::new(fpath))?;
+    let head = repo.head()?;
+
+    let mut revwalk = repo.revwalk()?;
+    revwalk.set_sorting(git2::Sort::TIME)?;
+    revwalk.push_head()?;
+    for commit_id in revwalk {
+        let commit_id = commit_id?;
+        let commit = repo.find_commit(commit_id)?;
+        // Ignore merge commits (2+ parents) because that's what 'git whatchanged' does.
+        // Ignore commit with 0 parents (initial commit) because there's nothing to diff against
+        if commit.parent_count() == 1 {
+            let prev_commit = commit.parent(0)?;
+            let tree = commit.tree()?;
+            let prev_tree = prev_commit.tree()?;
+            let diff = repo.diff_tree_to_tree(Some(&prev_tree), Some(&tree), None)?;
+            for delta in diff.deltas() {
+                let file_path = delta.new_file().path().unwrap();
+                if file_path == Path::new(fpath) {
+                    return Ok(format!(
+                        "<div class='version'>version: {}{}@{} last modified at {}</div>",
+                        &commit.id().to_string()[0..8],
+                        if status == Status::CURRENT { "" } else { "+" },
+                        head.shorthand().unwrap_or(""),
+                        DateTime::<Local>::from(DateTime::<Utc>::from_utc(
+                            NaiveDateTime::from_timestamp(commit.time().seconds(), 0),
+                            Utc,
+                        ))
+                        .format("%Y-%m-%d %H:%M:%S")
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok("".to_owned())
 }

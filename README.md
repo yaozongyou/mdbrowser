@@ -20,5 +20,7 @@ This will run a local web server on port 8080 that points to your markdown direc
     --css_class="doc"                                            \
     --style="https://chromium.googlesource.com/+static/base.css" \
     --style="https://chromium.googlesource.com/+static/doc.css"  \
-    --style="body {width: 1024px;margin: auto;} .toc-aux {background: #f9f9f9; border: 1px solid #f2f2f2}"
+    --style="body {width: 1024px;margin: auto;}"                 \
+    --style=".toc {margin-bottom: 16px;} .toc-aux {background: #f9f9f9; border: 1px solid #f2f2f2}"  \
+    --style=".version {margin-top: -10px; margin-bottom: 16px;}"
 ```
