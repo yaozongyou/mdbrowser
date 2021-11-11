@@ -52,7 +52,7 @@ async fn handle_markdown(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     if fpath.as_str().ends_with(".md") {
         let contents =
-            fs::read_to_string(directory.to_str().unwrap().to_owned() + "/" + &fpath.as_str())
+            fs::read_to_string(directory.to_str().unwrap().to_owned() + "/" + fpath.as_str())
                 .unwrap();
 
         let mut options = Options::empty();
@@ -100,7 +100,7 @@ async fn handle_markdown(
             &directory.to_str().unwrap().to_owned(),
             &fpath.as_str().to_owned(),
         )
-        .unwrap_or("".to_owned());
+        .unwrap_or_default();
 
         let re = Regex::new(r"(</h[1-5]>)").unwrap();
         let md_output = re.replace(&md_output, &("$1 ".to_owned() + &version));
@@ -149,7 +149,7 @@ fn get_html_style_header(style_links: &Option<Vec<String>>) -> String {
         .iter()
         .filter(|&s| !s.is_empty())
         .map(|s| {
-            if s.contains("{") {
+            if s.contains('{') {
                 format!("<style>{}</style>\n", s)
             } else {
                 format!(
@@ -168,7 +168,7 @@ fn get_html_script_header(script_links: &Option<Vec<String>>) -> String {
         .iter()
         .filter(|&s| !s.is_empty())
         .map(|s| {
-            if s.contains("(") {
+            if s.contains('(') {
                 format!("<script type=\"text/javascript\">{}</script>", s)
             } else {
                 format!("<script type=\"text/javascript\" src=\"{}\"></script>", s)
@@ -241,7 +241,7 @@ fn order_toc_list(mut heading_list: Vec<(u32, String)>) -> Vec<ContentItem> {
     content_items
 }
 
-fn render_toc(contents: &Vec<ContentItem>) -> String {
+fn render_toc(contents: &[ContentItem]) -> String {
     if contents.is_empty() {
         return "".to_owned();
     }
@@ -281,7 +281,7 @@ fn get_table_of_contents(contents: &str) -> String {
     toc
 }
 
-fn get_file_git_version(repo_dir: &String, fpath: &String) -> Result<String, Error> {
+fn get_file_git_version(repo_dir: &str, fpath: &str) -> Result<String, Error> {
     let fpath = fpath.trim_start_matches('/');
     let repo = Repository::open(repo_dir)?;
     let status = repo.status_file(Path::new(fpath))?;
