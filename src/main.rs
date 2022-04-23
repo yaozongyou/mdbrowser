@@ -50,63 +50,62 @@ async fn handle_markdown(
     style_header: String,
     script_header: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    if fpath.as_str().ends_with(".md") {
-        let contents =
-            fs::read_to_string(directory.to_str().unwrap().to_owned() + "/" + fpath.as_str())
-                .unwrap();
+    if !fpath.as_str().ends_with(".md") {
+        return Err(warp::reject());
+    }
 
-        let mut options = Options::empty();
-        options.insert(Options::ENABLE_STRIKETHROUGH);
-        options.insert(Options::ENABLE_TABLES);
-        let parser = Parser::new_ext(&contents, options);
+    let contents =
+        fs::read_to_string(directory.to_str().unwrap().to_owned() + "/" + fpath.as_str())
+            .map_err(|_| warp::reject())?;
 
-        // add anchors to headings
-        let mut heading_level = 0;
-        let parser = parser.filter_map(|event| match event {
-            Event::Start(Tag::Heading(level @ 1..=6)) => {
-                heading_level = level;
-                None
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    let parser = Parser::new_ext(&contents, options);
+
+    // add anchors to headings
+    let mut heading_level = 0;
+    let parser = parser.filter_map(|event| match event {
+        Event::Start(Tag::Heading(level @ 1..=6)) => {
+            heading_level = level;
+            None
+        }
+        Event::Text(text) => {
+            if heading_level != 0 {
+                let anchor = text
+                    .clone()
+                    .into_string()
+                    .trim()
+                    .to_lowercase()
+                    .replace(' ', "-");
+                let tmp = Event::Html(CowStr::from(format!(
+                    "<h{} id=\"{}\">{}",
+                    heading_level, anchor, text
+                )))
+                .into();
+                heading_level = 0;
+                return tmp;
             }
-            Event::Text(text) => {
-                if heading_level != 0 {
-                    let anchor = text
-                        .clone()
-                        .into_string()
-                        .trim()
-                        .to_lowercase()
-                        .replace(" ", "-");
-                    let tmp = Event::Html(CowStr::from(format!(
-                        "<h{} id=\"{}\">{}",
-                        heading_level, anchor, text
-                    )))
-                    .into();
-                    heading_level = 0;
-                    return tmp;
-                }
-                Some(Event::Text(text))
-            }
-            _ => Some(event),
-        });
+            Some(Event::Text(text))
+        }
+        _ => Some(event),
+    });
 
-        let mut md_output = String::new();
-        html::push_html(&mut md_output, parser);
-        let re = Regex::new(r"(\p{Han})\p{White_Space}(\p{Han})").unwrap();
-        let md_output = re.replace_all(&md_output, "$1$2");
+    let mut md_output = String::new();
+    html::push_html(&mut md_output, parser);
+    let re = Regex::new(r"(\p{Han})\p{White_Space}(\p{Han})").unwrap();
+    let md_output = re.replace_all(&md_output, "$1$2");
 
-        let md_output =
-            md_output.replace("<p>[TOC]</p>", get_table_of_contents(&contents).as_str());
+    let md_output = md_output.replace("<p>[TOC]</p>", get_table_of_contents(&contents).as_str());
 
-        let version = get_file_git_version(
-            &directory.to_str().unwrap().to_owned(),
-            &fpath.as_str().to_owned(),
-        )
-        .unwrap_or_default();
+    let version =
+        get_file_git_version(directory.to_str().unwrap(), fpath.as_str()).unwrap_or_default();
 
-        let re = Regex::new(r"(</h[1-5]>)").unwrap();
-        let md_output = re.replace(&md_output, &("$1 ".to_owned() + &version));
+    let re = Regex::new(r"(</h[1-5]>)").unwrap();
+    let md_output = re.replace(&md_output, &("$1 ".to_owned() + &version));
 
-        let mut result = format!(
-            "<!DOCTYPE html>
+    let mut result = format!(
+        "<!DOCTYPE html>
 <html>
 <head>
 <meta charset=\"UTF-8\">
@@ -115,19 +114,16 @@ async fn handle_markdown(
 {}
 </head>
 <body>",
-            get_title(&contents),
-            style_header,
-            script_header
-        );
-        result.push_str(&format!("<div class=\"{}\">", css_class));
-        result.push_str(&md_output);
-        result.push_str("</div>");
-        result.push_str("</body>");
+        get_title(&contents),
+        style_header,
+        script_header
+    );
+    result.push_str(&format!("<div class=\"{}\">", css_class));
+    result.push_str(&md_output);
+    result.push_str("</div>");
+    result.push_str("</body>");
 
-        Ok(Response::builder().body(result))
-    } else {
-        Err(warp::reject())
-    }
+    Ok(Response::builder().body(result))
 }
 
 fn get_title(contents: &str) -> String {
@@ -251,7 +247,7 @@ fn render_toc(contents: &[ContentItem]) -> String {
         str.push_str(
             format!(
                 "<li><a href=\"#{}\">{}</a></li>\n",
-                content.text.trim().to_lowercase().replace(" ", "-"),
+                content.text.trim().to_lowercase().replace(' ', "-"),
                 content.text
             )
             .as_str(),
@@ -293,28 +289,31 @@ fn get_file_git_version(repo_dir: &str, fpath: &str) -> Result<String, Error> {
     for commit_id in revwalk {
         let commit_id = commit_id?;
         let commit = repo.find_commit(commit_id)?;
-        // Ignore merge commits (2+ parents) because that's what 'git whatchanged' does.
-        // Ignore commit with 0 parents (initial commit) because there's nothing to diff against
-        if commit.parent_count() == 1 {
-            let prev_commit = commit.parent(0)?;
-            let tree = commit.tree()?;
-            let prev_tree = prev_commit.tree()?;
-            let diff = repo.diff_tree_to_tree(Some(&prev_tree), Some(&tree), None)?;
-            for delta in diff.deltas() {
-                let file_path = delta.new_file().path().unwrap();
-                if file_path == Path::new(fpath) {
-                    return Ok(format!(
-                        "<div class='version'>version: {}{}@{} last modified at {}</div>",
-                        &commit.id().to_string()[0..8],
-                        if status == Status::CURRENT { "" } else { "+" },
-                        head.shorthand().unwrap_or(""),
-                        DateTime::<Local>::from(DateTime::<Utc>::from_utc(
-                            NaiveDateTime::from_timestamp(commit.time().seconds(), 0),
-                            Utc,
-                        ))
-                        .format("%Y-%m-%d %H:%M:%S")
-                    ));
-                }
+
+        if commit.parent_count() != 1 {
+            // Ignore merge commits (2+ parents) because that's what 'git whatchanged' does.
+            // Ignore commit with 0 parents (initial commit) because there's nothing to diff against
+            continue;
+        }
+
+        let prev_commit = commit.parent(0)?;
+        let tree = commit.tree()?;
+        let prev_tree = prev_commit.tree()?;
+        let diff = repo.diff_tree_to_tree(Some(&prev_tree), Some(&tree), None)?;
+        for delta in diff.deltas() {
+            let file_path = delta.new_file().path().unwrap();
+            if file_path == Path::new(fpath) {
+                return Ok(format!(
+                    "<div class='version'>version: {}{}@{} last modified at {}</div>",
+                    &commit.id().to_string()[0..8],
+                    if status == Status::CURRENT { "" } else { "+" },
+                    head.shorthand().unwrap_or(""),
+                    DateTime::<Local>::from(DateTime::<Utc>::from_utc(
+                        NaiveDateTime::from_timestamp(commit.time().seconds(), 0),
+                        Utc,
+                    ))
+                    .format("%Y-%m-%d %H:%M:%S")
+                ));
             }
         }
     }
