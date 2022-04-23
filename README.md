@@ -1,5 +1,7 @@
 # mdbrowser
 
+[![Rust](https://github.com/yaozongyou/mdbrowser/actions/workflows/rust.yml/badge.svg)](https://github.com/yaozongyou/mdbrowser/actions/workflows/rust.yml)
+
 This is a simple tool to render markdown docs. You can specify the style with
 --style flag.  You can also specify a different listening address with the -l
 flag.  Run --help for more options.
